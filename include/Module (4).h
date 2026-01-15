@@ -3,6 +3,9 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
+#include <memory>
+#include <algorithm>
 #include "Module.h"
 #include "Module (2).h"
 #include "Module (5).h"
@@ -11,50 +14,139 @@ using namespace std;
 
 class AppointmentItem {
 public:
-    string aid, pid, did, date, time, status;
+    string aid;
+    string pid;
+    string did;
+    string date;
+    string time;
+    string status;
+
     AppointmentItem() : status("Scheduled") {}
+    
+    AppointmentItem(const string& appointmentId, const string& patientId, 
+                    const string& doctorId, const string& appointmentDate, 
+                    const string& appointmentTime)
+        : aid(appointmentId), pid(patientId), did(doctorId), 
+          date(appointmentDate), time(appointmentTime), status("Scheduled") {}
 };
 
 class MedicalNote {
 public:
-    string rid, pid, did, date, diagnosis, remedy;
+    string rid;
+    string pid;
+    string did;
+    string date;
+    string diagnosis;
+    string remedy;
+
+    MedicalNote() {}
+    
+    MedicalNote(const string& recordId, const string& patientId, 
+                const string& doctorId, const string& recordDate, 
+                const string& diag, const string& treatment)
+        : rid(recordId), pid(patientId), did(doctorId), 
+          date(recordDate), diagnosis(diag), remedy(treatment) {}
 };
 
 class BillingItem {
 public:
-    string bid, pid, date, label;
+    string bid;
+    string pid;
+    string date;
+    string label;
     double cost;
-    BillingItem() : cost(0), label("Unpaid") {}
+
+    BillingItem() : cost(0.0), label("Unpaid") {}
+    
+    BillingItem(const string& billId, const string& patientId, 
+                const string& billDate, double amount)
+        : bid(billId), pid(patientId), date(billDate), 
+          cost(amount), label("Unpaid") {}
 };
 
 class RoomSpot {
 public:
-    string roomNum, assignedPid;
-    bool filled = false;
+    string roomNum;
+    string assignedPid;
+    bool filled;
+
+    RoomSpot() : filled(false) {}
+    
+    explicit RoomSpot(const string& roomNumber) 
+        : roomNum(roomNumber), filled(false) {}
 };
 
+// CRITICAL: Singleton pattern for managing all hospital data
+// Uses vectors instead of raw arrays for automatic memory management
 class DataControl {
 private:
-    BaseInterface* userList[100];
-    AppointmentItem appointmentList[200];
-    MedicalNote recordList[300];
-    BillingItem billList[400];
-    RoomSpot roomList[50];
+    // MAJOR CHANGE: vectors instead of raw arrays
+    // vectors automatically manage memory (no manual delete needed)
+    // vectors grow dynamically (no fixed size limits)
+    vector<unique_ptr<BaseInterface>> userList;  // unique_ptr ensures automatic cleanup
+    vector<AppointmentItem> appointmentList;
+    vector<MedicalNote> recordList;
+    vector<BillingItem> billList;
+    vector<RoomSpot> roomList;
 
-    int userTotal = 0, appTotal = 0, recTotal = 0, billTotal = 0, roomTotal = 0;
     static DataControl* handler;
 
     DataControl() {
-        for (int i = 1; i <= 20; i++) {
-            roomList[roomTotal++].roomNum = "R" + to_string(i);
+        roomList.reserve(20);  // Pre-allocate space for efficiency
+        for (int i = 1; i <= 20; ++i) {
+            roomList.push_back(RoomSpot("R" + to_string(i)));
         }
     }
 
-public:
-    static DataControl* getInstance();
+    // Prevent copying (singleton pattern)
+    DataControl(const DataControl&) = delete;
+    DataControl& operator=(const DataControl&) = delete;
 
-    BaseInterface* validateUser(string mail, string pass);
-    void pushUser(BaseInterface* u);
+public:
+    static DataControl* getInstance() {
+        if (!handler) {
+            handler = new DataControl();
+        }
+        return handler;
+    }
+
+    // CRITICAL: Cleanup singleton on program exit
+    static void destroyInstance() {
+        delete handler;
+        handler = nullptr;
+    }
+
+    ~DataControl() {
+        // unique_ptr automatically cleans up all users
+        // vectors automatically clean up their contents
+    }
+
+    BaseInterface* validateUser(const string& mail, const string& pass) {
+        for (const auto& user : userList) {
+            if (user->authenticate(mail, pass)) {
+                return user.get();  // Return raw pointer (ownership stays with unique_ptr)
+            }
+        }
+        return nullptr;
+    }
+
+    // MAJOR CHANGE: Takes ownership via unique_ptr
+    void pushUser(unique_ptr<BaseInterface> u) {
+        // Check for duplicate ID
+        for (const auto& user : userList) {
+            if (user->getUserId() == u->getUserId()) {
+                cout << "[ERROR] Duplicate ID found: " << u->getUserId() << "\n";
+                return;
+            }
+            if (user->getEmailId() == u->getEmailId()) {
+                cout << "[ERROR] Duplicate email found: " << u->getEmailId() << "\n";
+                return;
+            }
+        }
+        
+        cout << "[SUCCESS] User " << u->getUserId() << " added successfully.\n";
+        userList.push_back(std::move(u));  // Transfer ownership to vector
+    }
 
     void registerNewDoctor();
     void registerNewPatient();
@@ -62,146 +154,133 @@ public:
     void removeUserById();
 
     void displayAppointments();
-    void makeAppointment(string patientId);
+    void makeAppointment(const string& patientId);
     void makeAppointmentManual();
-    void removeAppointment(string aid);
-    void inputMedicalRecord(string docName);
-    void printRecordsForPatient(string pid);
-    void showBills(string pid);
+    void removeAppointment(const string& aid);
+    
+    void inputMedicalRecord(const string& docName);
+    void printRecordsForPatient(const string& pid);
+    
+    void showBills(const string& pid);
     void handleBilling();
+    
     void assignRoomToPatient();
     void viewRoomAssignments();
+    
     void listAllPatients();
-    void reviseUserProfile(string uid, string phone, string addr);
+    void listAllUsers();
+    void reviseUserProfile(const string& uid, const string& phone, const string& addr);
+
+    // Utility functions
+    size_t getUserCount() const { return userList.size(); }
+    size_t getAppointmentCount() const { return appointmentList.size(); }
+    size_t getRecordCount() const { return recordList.size(); }
+    size_t getBillCount() const { return billList.size(); }
 };
 
 DataControl* DataControl::handler = nullptr;
 
-DataControl* DataControl::getInstance() {
-    if (!handler)
-        handler = new DataControl();
-    return handler;
-}
-
-BaseInterface* DataControl::validateUser(string mail, string pass) {
-    for (int i = 0; i < userTotal; ++i)
-        if (userList[i]->authenticate(mail, pass))
-            return userList[i];
-    return nullptr;
-}
-
-void DataControl::pushUser(BaseInterface* u) {
-    for (int i = 0; i < userTotal; ++i) {
-        if (userList[i]->getUserId() == u->getUserId()) {
-            cout << "[ERROR] Duplicate ID found.\n";
-            return;
-        }
-        if (userList[i]->getEmailId() == u->getEmailId()) {
-            cout << "[ERROR] Duplicate email found.\n";
-            return;
-        }
-    }
-    userList[userTotal++] = u;
-    cout << "[SUCCESS] User " << u->getUserId() << " added successfully.\n";
-}
-
 void DataControl::registerNewDoctor() {
-    BaseInterface* newDoc = AccountGenerator::fabricate("Doctor");
-    if (!newDoc) {
-        cout << "[ERROR] Doctor creation failed.\n";
-        return;
-    }
-    pushUser(newDoc);
+    string id = InputTools::getValidatedString("Doctor ID: ");
+    string name = InputTools::getValidatedString("Name: ");
+    string email = InputTools::getValidatedEmail("Email: ");
+    string pass = InputTools::getValidatedPassword("Password: ");
+    string specialty = InputTools::getValidatedString("Specialization: ");
+    
+    auto newDoc = make_unique<DoctorUnit>(id, name, email, pass, specialty);
+    pushUser(std::move(newDoc));
 }
 
 void DataControl::registerNewPatient() {
-    BaseInterface* newPat = AccountGenerator::fabricate("Patient");
-    if (!newPat) {
-        cout << "[ERROR] Patient creation failed.\n";
-        return;
-    }
-    pushUser(newPat);
+    string id = InputTools::getValidatedString("Patient ID: ");
+    string name = InputTools::getValidatedString("Name: ");
+    string email = InputTools::getValidatedEmail("Email: ");
+    string pass = InputTools::getValidatedPassword("Password: ");
+    string phone = InputTools::getValidatedPhone("Phone: ");
+    string address = InputTools::getValidatedString("Address: ");
+    
+    auto newPat = make_unique<PatientUnit>(id, name, email, pass, phone, address);
+    pushUser(std::move(newPat));
 }
 
 void DataControl::registerNewReceptionist() {
-    BaseInterface* newRec = AccountGenerator::fabricate("Receptionist");
-    if (!newRec) {
-        cout << "[ERROR] Receptionist creation failed.\n";
-        return;
-    }
-    pushUser(newRec);
+    string id = InputTools::getValidatedString("Receptionist ID: ");
+    string name = InputTools::getValidatedString("Name: ");
+    string email = InputTools::getValidatedEmail("Email: ");
+    string pass = InputTools::getValidatedPassword("Password: ");
+    
+    auto newRec = make_unique<FrontDesk>(id, name, email, pass);
+    pushUser(std::move(newRec));
 }
 
 void DataControl::removeUserById() {
     string id = InputTools::getValidatedString("Enter ID to remove: ");
-    cout << "Are you sure you want to delete user with ID " << id << "? Type YES to confirm: ";
-    string confirm;
-    getline(cin, confirm);
-    if (confirm != "YES") {
+    
+    if (!InputTools::getConfirmation("Are you sure you want to delete user " + id + "?")) {
         cout << "[INFO] Deletion cancelled.\n";
         return;
     }
 
-    for (int i = 0; i < userTotal; ++i) {
-        if (userList[i]->getUserId() == id) {
-            for (int j = i; j < userTotal - 1; ++j)
-                userList[j] = userList[j + 1];
-            userTotal--;
+    // Find and remove user
+    auto userIt = find_if(userList.begin(), userList.end(),
+        [&id](const unique_ptr<BaseInterface>& user) {
+            return user->getUserId() == id;
+        });
 
-            for (int j = 0; j < appTotal;) {
-                if (appointmentList[j].pid == id || appointmentList[j].did == id) {
-                    for (int k = j; k < appTotal - 1; ++k)
-                        appointmentList[k] = appointmentList[k + 1];
-                    appTotal--;
-                } else {
-                    ++j;
-                }
-            }
-
-            cout << "[SUCCESS] User " << id << " removed.\n";
-            return;
-        }
+    if (userIt == userList.end()) {
+        cout << "[ERROR] User ID not found.\n";
+        return;
     }
 
-    cout << "[ERROR] User ID not found.\n";
+    userList.erase(userIt);  // unique_ptr automatically deletes the object
+
+    // Remove associated appointments
+    appointmentList.erase(
+        remove_if(appointmentList.begin(), appointmentList.end(),
+            [&id](const AppointmentItem& apt) {
+                return apt.pid == id || apt.did == id;
+            }),
+        appointmentList.end()
+    );
+
+    cout << "[SUCCESS] User " << id << " removed.\n";
 }
 
 void DataControl::displayAppointments() {
-    if (appTotal == 0) {
+    if (appointmentList.empty()) {
         cout << "[INFO] No appointments scheduled.\n";
         return;
     }
-    for (int i = 0; i < appTotal; ++i) {
-        cout << "Appointment ID: " << appointmentList[i].aid
-             << ", Patient: " << appointmentList[i].pid
-             << ", Doctor: " << appointmentList[i].did
-             << ", Date: " << appointmentList[i].date
-             << ", Time: " << appointmentList[i].time
-             << ", Status: " << appointmentList[i].status << endl;
+    
+    cout << "\n================ APPOINTMENTS ================\n";
+    for (const auto& apt : appointmentList) {
+        cout << "ID: " << apt.aid 
+             << " | Patient: " << apt.pid
+             << " | Doctor: " << apt.did
+             << " | Date: " << apt.date
+             << " | Time: " << apt.time
+             << " | Status: " << apt.status << "\n";
     }
+    cout << "==============================================\n";
 }
 
-void DataControl::makeAppointment(string patientId) {
+void DataControl::makeAppointment(const string& patientId) {
     string docId = InputTools::getValidatedString("Enter Doctor ID: ");
-    string date = InputTools::getValidatedString("Date (YYYY-MM-DD): ");
-    string time = InputTools::getValidatedString("Time (HH:MM): ");
+    string date = InputTools::getValidatedDate("Date (YYYY-MM-DD): ");
+    string time = InputTools::getValidatedTime("Time (HH:MM): ");
 
-    for (int i = 0; i < appTotal; ++i) {
-        if (appointmentList[i].date == date && appointmentList[i].time == time &&
-            (appointmentList[i].pid == patientId || appointmentList[i].did == docId)) {
+    // Check for conflicts
+    for (const auto& apt : appointmentList) {
+        if (apt.date == date && apt.time == time &&
+            (apt.pid == patientId || apt.did == docId)) {
             cout << "[ERROR] Overlapping appointment detected!\n";
             return;
         }
     }
 
-    AppointmentItem a;
-    a.aid = "A" + to_string(appTotal + 1);
-    a.pid = patientId;
-    a.did = docId;
-    a.date = date;
-    a.time = time;
-    appointmentList[appTotal++] = a;
-    cout << "[SUCCESS] Appointment booked successfully.\n";
+    string aid = "A" + to_string(appointmentList.size() + 1);
+    appointmentList.emplace_back(aid, patientId, docId, date, time);
+    cout << "[SUCCESS] Appointment booked successfully. ID: " << aid << "\n";
 }
 
 void DataControl::makeAppointmentManual() {
@@ -209,95 +288,114 @@ void DataControl::makeAppointmentManual() {
     makeAppointment(pid);
 }
 
-void DataControl::removeAppointment(string aid) {
-    for (int i = 0; i < appTotal; ++i) {
-        if (appointmentList[i].aid == aid) {
-            for (int j = i; j < appTotal - 1; ++j)
-                appointmentList[j] = appointmentList[j + 1];
-            appTotal--;
-            cout << "[SUCCESS] Appointment cancelled.\n";
-            return;
-        }
-    }
-    cout << "[ERROR] Appointment ID not found.\n";
-}
+void DataControl::removeAppointment(const string& aid) {
+    auto it = find_if(appointmentList.begin(), appointmentList.end(),
+        [&aid](const AppointmentItem& apt) {
+            return apt.aid == aid;
+        });
 
-void DataControl::inputMedicalRecord(string docName) {
-    MedicalNote m;
-    m.pid = InputTools::getValidatedString("Patient ID: ");
-    m.did = docName;
-    m.date = "2025-06-26";
-    m.diagnosis = InputTools::getValidatedString("Diagnosis: ");
-    m.remedy = InputTools::getValidatedString("Treatment: ");
-    m.rid = "R" + to_string(recTotal + 1);
-    recordList[recTotal++] = m;
-    cout << "[SUCCESS] Medical record added.\n";
-}
-
-void DataControl::printRecordsForPatient(string pid) {
-    for (int i = 0; i < recTotal; ++i) {
-        if (recordList[i].pid == pid) {
-            cout << "Date: " << recordList[i].date << ", Diagnosis: " << recordList[i].diagnosis
-                 << ", Treatment: " << recordList[i].remedy << endl;
-        }
+    if (it != appointmentList.end()) {
+        appointmentList.erase(it);
+        cout << "[SUCCESS] Appointment cancelled.\n";
+    } else {
+        cout << "[ERROR] Appointment ID not found.\n";
     }
 }
 
-void DataControl::showBills(string pid) {
+void DataControl::inputMedicalRecord(const string& docName) {
+    string pid = InputTools::getValidatedString("Patient ID: ");
+    string date = InputTools::getValidatedDate("Date (YYYY-MM-DD): ");
+    string diagnosis = InputTools::getValidatedString("Diagnosis: ");
+    string treatment = InputTools::getValidatedString("Treatment: ");
+    
+    string rid = "R" + to_string(recordList.size() + 1);
+    recordList.emplace_back(rid, pid, docName, date, diagnosis, treatment);
+    cout << "[SUCCESS] Medical record added. ID: " << rid << "\n";
+}
+
+void DataControl::printRecordsForPatient(const string& pid) {
     bool found = false;
-    for (int i = 0; i < billTotal; ++i) {
-        if (billList[i].pid == pid) {
+    cout << "\n================ MEDICAL RECORDS ================\n";
+    for (const auto& rec : recordList) {
+        if (rec.pid == pid) {
             found = true;
-            cout << "Bill ID: " << billList[i].bid << ", Amount: $" << billList[i].cost
-                 << ", Status: " << billList[i].label << endl;
+            cout << "Record ID: " << rec.rid << "\n";
+            cout << "Date: " << rec.date << "\n";
+            cout << "Doctor: " << rec.did << "\n";
+            cout << "Diagnosis: " << rec.diagnosis << "\n";
+            cout << "Treatment: " << rec.remedy << "\n";
+            cout << "-------------------------------------------------\n";
         }
     }
     if (!found) {
-        cout << "[INFO] No bills found for Patient ID: " << pid << "\n";
+        cout << "No records found for Patient ID: " << pid << "\n";
     }
+    cout << "=================================================\n";
+}
+
+void DataControl::showBills(const string& pid) {
+    bool found = false;
+    cout << "\n================ BILLING INFORMATION ================\n";
+    for (const auto& bill : billList) {
+        if (bill.pid == pid) {
+            found = true;
+            cout << "Bill ID: " << bill.bid 
+                 << " | Amount: $" << bill.cost
+                 << " | Date: " << bill.date
+                 << " | Status: " << bill.label << "\n";
+        }
+    }
+    if (!found) {
+        cout << "No bills found for Patient ID: " << pid << "\n";
+    }
+    cout << "=====================================================\n";
 }
 
 void DataControl::handleBilling() {
     string pid = InputTools::getValidatedString("Patient ID: ");
-    string bid = InputTools::getValidatedString("Bill ID: ");
-    double amt = InputTools::getValidatedDouble("Amount: ");
+    string bid = "B" + to_string(billList.size() + 1);
+    double amt = InputTools::getValidatedDouble("Amount: $", 0.0);
 
-    BillingItem b;
-    b.bid = bid;
-    b.pid = pid;
-    b.date = "2025-06-26";
-    b.cost = amt;
-    billList[billTotal++] = b;
-    cout << "[SUCCESS] Bill created.\n";
+    string date = InputTools::getValidatedDate("Date (YYYY-MM-DD): ");
+    billList.emplace_back(bid, pid, date, amt);
+    cout << "[SUCCESS] Bill created. ID: " << bid << "\n";
 }
 
 void DataControl::assignRoomToPatient() {
     string pid = InputTools::getValidatedString("Patient ID: ");
     string roomNum = InputTools::getValidatedString("Room Number: ");
 
-    for (int i = 0; i < roomTotal; ++i) {
-        if (roomList[i].roomNum == roomNum && !roomList[i].filled) {
-            for (int j = 0; j < roomTotal; ++j) {
-                if (roomList[j].assignedPid == pid) {
-                    cout << "[ERROR] Patient already has a room assigned.\n";
-                    return;
-                }
-            }
-            roomList[i].assignedPid = pid;
-            roomList[i].filled = true;
-            cout << "[SUCCESS] Room assigned successfully.\n";
+    // Check if patient already has a room
+    for (const auto& room : roomList) {
+        if (room.assignedPid == pid) {
+            cout << "[ERROR] Patient already has room " << room.roomNum << " assigned.\n";
             return;
         }
     }
-    cout << "[ERROR] Room not available.\n";
+
+    // Find and assign room
+    for (auto& room : roomList) {
+        if (room.roomNum == roomNum) {
+            if (room.filled) {
+                cout << "[ERROR] Room already occupied by patient " << room.assignedPid << ".\n";
+                return;
+            }
+            room.assignedPid = pid;
+            room.filled = true;
+            cout << "[SUCCESS] Room " << roomNum << " assigned to patient " << pid << ".\n";
+            return;
+        }
+    }
+    cout << "[ERROR] Room number not found.\n";
 }
 
 void DataControl::viewRoomAssignments() {
-    cout << "\n================ ROOM ASSIGNMENTS ================\n";
     bool anyAssigned = false;
-    for (int i = 0; i < roomTotal; ++i) {
-        if (roomList[i].filled) {
-            cout << "Room " << roomList[i].roomNum << " is assigned to Patient ID: " << roomList[i].assignedPid << "\n";
+    cout << "\n================ ROOM ASSIGNMENTS ================\n";
+    for (const auto& room : roomList) {
+        if (room.filled) {
+            cout << "Room " << room.roomNum 
+                 << " → Patient ID: " << room.assignedPid << "\n";
             anyAssigned = true;
         }
     }
@@ -308,16 +406,56 @@ void DataControl::viewRoomAssignments() {
 }
 
 void DataControl::listAllPatients() {
-    for (int i = 0; i < userTotal; ++i) {
-        if (userList[i]->getRoleType() == "Patient") {
-            cout << "Patient ID: " << userList[i]->getUserId()
-                 << ", Name: " << userList[i]->getFullName() << endl;
+    bool found = false;
+    cout << "\n================ ALL PATIENTS ================\n";
+    for (const auto& user : userList) {
+        if (user->isPatient()) {
+            found = true;
+            cout << "ID: " << user->getUserId() 
+                 << " | Name: " << user->getFullName() 
+                 << " | Email: " << user->getEmailId() << "\n";
         }
     }
+    if (!found) {
+        cout << "No patients registered.\n";
+    }
+    cout << "==============================================\n";
 }
 
-void DataControl::reviseUserProfile(string uid, string phone, string addr) {
-    cout << "[SUCCESS] Profile updated for " << uid << ".\n";
+void DataControl::listAllUsers() {
+    cout << "\n================ ALL USERS ================\n";
+    for (const auto& user : userList) {
+        cout << "ID: " << user->getUserId() 
+             << " | Name: " << user->getFullName() 
+             << " | Role: " << user->getRoleType() 
+             << " | Email: " << user->getEmailId() << "\n";
+    }
+    cout << "Total Users: " << userList.size() << "\n";
+    cout << "===========================================\n";
 }
 
-#endif // MODULE_4_H
+void DataControl::reviseUserProfile(const string& uid, const string& phone, const string& addr) {
+    auto it = find_if(userList.begin(), userList.end(),
+        [&uid](const unique_ptr<BaseInterface>& user) {
+            return user->getUserId() == uid;
+        });
+
+    if (it != userList.end()) {
+        // Downcast to PatientUnit to access patient-specific methods
+        if ((*it)->isPatient()) {
+            PatientUnit* patient = dynamic_cast<PatientUnit*>(it->get());
+            if (patient) {
+                patient->setPhoneNumber(phone);
+                patient->setAddress(addr);
+                cout << "[SUCCESS] Profile updated for patient " << uid << ".\n";
+                return;
+            }
+        }
+        cout << "[ERROR] Profile update only available for patients.\n";
+    } else {
+        cout << "[ERROR] User ID not found.\n";
+    }
+    
+}
+
+#endif

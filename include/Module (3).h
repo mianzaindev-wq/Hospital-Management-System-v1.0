@@ -10,14 +10,22 @@
 using namespace std;
 
 class DoctorUnit : public BaseInterface {
-    string area;
+private:
+    string specialization;
 
 public:
-    DoctorUnit(string id, string n, string e, string p, string s)
-        : BaseInterface(id, n, e, p, "Doctor"), area(s) {}
+    DoctorUnit(const string& id, const string& name, const string& email, 
+               const string& pass, const string& spec)
+        : BaseInterface(id, name, email, pass, "Doctor"), specialization(spec) {}
+
+    // Virtual destructor inherited from BaseInterface
+    virtual ~DoctorUnit() {}
+
+    const string& getSpecialization() const { return specialization; }
+    void setSpecialization(const string& spec) { specialization = spec; }
 
     void showDashboard() override {
-        int pick = 0;
+        int choice = 0;
         do {
             cout << "\n================== DOCTOR DASHBOARD ==================\n";
             cout << "[1]. View My Schedule\n";
@@ -26,27 +34,57 @@ public:
             cout << "[4]. View Bills\n";
             cout << "[5]. Logout\n";
             cout << "======================================================\n";
-            pick = InputTools::getValidatedInteger("Select option: ", 1, 5);
+            choice = InputTools::getValidatedInteger("Select option: ", 1, 5);
 
-            if (pick == 1)
-                DataControl::getInstance()->displayAppointments();
-            else if (pick == 2)
-                DataControl::getInstance()->inputMedicalRecord(fullName);
-            else if (pick == 3)
-                DataControl::getInstance()->printRecordsForPatient(InputTools::getValidatedString("Enter Patient ID: "));
-            else if (pick == 4)
-                DataControl::getInstance()->showBills(InputTools::getValidatedString("Enter Patient ID: "));
+            switch (choice) {
+                case 1:
+                    DataControl::getInstance()->displayAppointments();
+                    break;
+                case 2:
+                    DataControl::getInstance()->inputMedicalRecord(fullName);
+                    break;
+                case 3: {
+                    string pid = InputTools::getValidatedString("Enter Patient ID: ");
+                    DataControl::getInstance()->printRecordsForPatient(pid);
+                    break;
+                }
+                case 4: {
+                    string pid = InputTools::getValidatedString("Enter Patient ID: ");
+                    DataControl::getInstance()->showBills(pid);
+                    break;
+                }
+                case 5:
+                    cout << "[INFO] Logging out...\n";
+                    break;
+            }
+        } while (choice != 5);
+    }
 
-        } while (pick != 5);
+    void displayInfo() const override {
+        BaseInterface::displayInfo();
+        cout << "Specialization: " << specialization << "\n";
+        cout << "==================================================\n";
     }
 };
 
 class PatientUnit : public BaseInterface {
-    string mobile, location;
+private:
+    string phoneNumber;
+    string address;
 
 public:
-    PatientUnit(string id, string n, string e, string p, string ph, string addr)
-        : BaseInterface(id, n, e, p, "Patient"), mobile(ph), location(addr) {}
+    PatientUnit(const string& id, const string& name, const string& email, 
+                const string& pass, const string& phone, const string& addr)
+        : BaseInterface(id, name, email, pass, "Patient"), 
+          phoneNumber(phone), address(addr) {}
+
+    virtual ~PatientUnit() {}
+
+    const string& getPhoneNumber() const { return phoneNumber; }
+    const string& getAddress() const { return address; }
+    
+    void setPhoneNumber(const string& phone) { phoneNumber = phone; }
+    void setAddress(const string& addr) { address = addr; }
 
     void showDashboard() override {
         int choice = 0;
@@ -62,33 +100,57 @@ public:
             cout << "======================================================\n";
             choice = InputTools::getValidatedInteger("Select option: ", 1, 7);
 
-            if (choice == 1)
-                DataControl::getInstance()->makeAppointment(uid);
-            else if (choice == 2)
-                DataControl::getInstance()->displayAppointments();
-            else if (choice == 3)
-                DataControl::getInstance()->removeAppointment(InputTools::getValidatedString("Enter Appointment ID to cancel: "));
-            else if (choice == 4)
-                DataControl::getInstance()->printRecordsForPatient(uid);
-            else if (choice == 5)
-                DataControl::getInstance()->showBills(uid);
-            else if (choice == 6) {
-                mobile = InputTools::getValidatedString("Enter new phone: ");
-                location = InputTools::getValidatedString("Enter new address: ");
-                DataControl::getInstance()->reviseUserProfile(uid, mobile, location);
+            switch (choice) {
+                case 1:
+                    DataControl::getInstance()->makeAppointment(uid);
+                    break;
+                case 2:
+                    DataControl::getInstance()->displayAppointments();
+                    break;
+                case 3: {
+                    string aid = InputTools::getValidatedString("Enter Appointment ID to cancel: ");
+                    DataControl::getInstance()->removeAppointment(aid);
+                    break;
+                }
+                case 4:
+                    DataControl::getInstance()->printRecordsForPatient(uid);
+                    break;
+                case 5:
+                    DataControl::getInstance()->showBills(uid);
+                    break;
+                case 6: {
+                    string newPhone = InputTools::getValidatedPhone("Enter new phone: ");
+                    string newAddr = InputTools::getValidatedString("Enter new address: ");
+                    setPhoneNumber(newPhone);
+                    setAddress(newAddr);
+                    DataControl::getInstance()->reviseUserProfile(uid, newPhone, newAddr);
+                    cout << "[SUCCESS] Profile updated.\n";
+                    break;
+                }
+                case 7:
+                    cout << "[INFO] Logging out...\n";
+                    break;
             }
-
         } while (choice != 7);
+    }
+
+    void displayInfo() const override {
+        BaseInterface::displayInfo();
+        cout << "Phone    : " << phoneNumber << "\n";
+        cout << "Address  : " << address << "\n";
+        cout << "==================================================\n";
     }
 };
 
 class FrontDesk : public BaseInterface {
 public:
-    FrontDesk(string id, string n, string e, string p)
-        : BaseInterface(id, n, e, p, "Receptionist") {}
+    FrontDesk(const string& id, const string& name, const string& email, const string& pass)
+        : BaseInterface(id, name, email, pass, "Receptionist") {}
+
+    virtual ~FrontDesk() {}
 
     void showDashboard() override {
-        int action = 0;
+        int choice = 0;
         do {
             cout << "\n================ RECEPTIONIST DASHBOARD ==============\n";
             cout << "[1]. Register New Patient\n";
@@ -100,34 +162,49 @@ public:
             cout << "[7]. View Room Assignments\n";
             cout << "[8]. Logout\n";
             cout << "======================================================\n";
-            action = InputTools::getValidatedInteger("Choose option: ", 1, 8);
+            choice = InputTools::getValidatedInteger("Choose option: ", 1, 8);
 
-            if (action == 1)
-                DataControl::getInstance()->registerNewPatient();
-            else if (action == 2)
-                DataControl::getInstance()->makeAppointmentManual();
-            else if (action == 3)
-                DataControl::getInstance()->assignRoomToPatient();
-            else if (action == 4)
-                DataControl::getInstance()->handleBilling();
-            else if (action == 5)
-                DataControl::getInstance()->listAllPatients();
-            else if (action == 6)
-                DataControl::getInstance()->showBills(InputTools::getValidatedString("Enter Patient ID: "));
-            else if (action == 7)
-                DataControl::getInstance()->viewRoomAssignments();
-
-        } while (action != 8);
+            switch (choice) {
+                case 1:
+                    DataControl::getInstance()->registerNewPatient();
+                    break;
+                case 2:
+                    DataControl::getInstance()->makeAppointmentManual();
+                    break;
+                case 3:
+                    DataControl::getInstance()->assignRoomToPatient();
+                    break;
+                case 4:
+                    DataControl::getInstance()->handleBilling();
+                    break;
+                case 5:
+                    DataControl::getInstance()->listAllPatients();
+                    break;
+                case 6: {
+                    string pid = InputTools::getValidatedString("Enter Patient ID: ");
+                    DataControl::getInstance()->showBills(pid);
+                    break;
+                }
+                case 7:
+                    DataControl::getInstance()->viewRoomAssignments();
+                    break;
+                case 8:
+                    cout << "[INFO] Logging out...\n";
+                    break;
+            }
+        } while (choice != 8);
     }
 };
 
 class AdminUnit : public BaseInterface {
 public:
-    AdminUnit(string id, string n, string e, string p)
-        : BaseInterface(id, n, e, p, "Admin") {}
+    AdminUnit(const string& id, const string& name, const string& email, const string& pass)
+        : BaseInterface(id, name, email, pass, "Admin") {}
+
+    virtual ~AdminUnit() {}
 
     void showDashboard() override {
-        int input = 0;
+        int choice = 0;
         do {
             cout << "\n=================== ADMIN DASHBOARD ==================\n";
             cout << "[1]. Add Doctor\n";
@@ -136,25 +213,41 @@ public:
             cout << "[4]. View Appointments\n";
             cout << "[5]. View Patient Bills\n";
             cout << "[6]. View Room Assignments\n";
-            cout << "[7]. Logout\n";
+            cout << "[7]. View All Users\n";
+            cout << "[8]. Logout\n";
             cout << "======================================================\n";
-            input = InputTools::getValidatedInteger("Select action: ", 1, 7);
+            choice = InputTools::getValidatedInteger("Select action: ", 1, 8);
 
-            if (input == 1)
-                DataControl::getInstance()->registerNewDoctor();
-            else if (input == 2)
-                DataControl::getInstance()->registerNewReceptionist();
-            else if (input == 3)
-                DataControl::getInstance()->removeUserById();
-            else if (input == 4)
-                DataControl::getInstance()->displayAppointments();
-            else if (input == 5)
-                DataControl::getInstance()->showBills(InputTools::getValidatedString("Enter patient ID: "));
-            else if (input == 6)
-                DataControl::getInstance()->viewRoomAssignments();
-
-        } while (input != 7);
+            switch (choice) {
+                case 1:
+                    DataControl::getInstance()->registerNewDoctor();
+                    break;
+                case 2:
+                    DataControl::getInstance()->registerNewReceptionist();
+                    break;
+                case 3:
+                    DataControl::getInstance()->removeUserById();
+                    break;
+                case 4:
+                    DataControl::getInstance()->displayAppointments();
+                    break;
+                case 5: {
+                    string pid = InputTools::getValidatedString("Enter patient ID: ");
+                    DataControl::getInstance()->showBills(pid);
+                    break;
+                }
+                case 6:
+                    DataControl::getInstance()->viewRoomAssignments();
+                    break;
+                case 7:
+                    DataControl::getInstance()->listAllUsers();
+                    break;
+                case 8:
+                    cout << "[INFO] Logging out...\n";
+                    break;
+            }
+        } while (choice != 8);
     }
 };
 
-#endif // MODULE_3_H
+#endif
